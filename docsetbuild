@@ -1,0 +1,208 @@
+#!/usr/bin/php
+<?php
+	if(!isset($argv[2])) {
+		die("Usage: docsetbuild last.docset reference [destination]\n                   --create reference name title [index] [destination]\nCreates Docsets for Dash and XCode with the help of the last one.\n\nlast.docset: The last docset for comparison (with trailing slash).\nreference:   The reference folder with all .html files, images... (with trailing slash).\ndestination: Folder to put the docset into (also with trailing slash). Optional, if not given, current directory will be used.\nname:        The name of the docset (for example Arduino)\ntitle:       The title of the reference (for example \"Arduino Reference\")\nindex:       The index file (normally index.html, which will be used if not given, but required when using destination)");
+	}
+	$array = array();
+	$lastdocset = "";
+	$create = false;
+	if($argv[1] == "--create") {
+		$create = true;
+		$docsetname = $argv[3];
+		$docsettitle = $argv[4];
+		if(isset($argv[5])) {
+			if(substr($argv[6], -1) != "/") {
+				$argv[6] .= "/";
+			}
+			if(!file_exists($argv[2] . $argv[5])) {
+				die("The index file $argv[2]$argv[5] does not exist.");
+			}
+			$docsetindex = $argv[5];
+			if(isset($argv[6])) {
+				$destination = $argv[6];
+			} else {
+				$destination = "./";
+			}
+		} else {
+			$docsetindex = "index.html";
+			$destination = "./";
+		}
+		$reference = $argv[2];
+		if(substr($argv[2], -1) != "/") {
+			$reference .= "/";
+		}
+	} else {
+		$create = false;
+		$reference = $argv[2];
+		$lastdocset = $argv[1];
+		$docsetname = str_replace(".docset", "", basename($argv[1]));
+		if(isset($argv[3])) {
+			$destination = $argv[3];
+		} else {
+			$destination = "./";
+		}
+		if(substr($lastdocset, -1) != "/") {
+			$lastdocset .= "/";
+		}
+		if(substr($destination, -1) != "/") {
+			$destination .= "/";
+		}
+		if(substr($reference, -1) != "/") {
+			$reference .= "/";
+		}
+		if(!file_exists($argv[1] . "Contents/docsetbuild/docsetbuild.data")) {
+			die("The docset you provided does not contain the required diff file. Please check if you used the right docset.\n");
+		}
+	}
+	if(file_exists($destination . "$docsetname.docset")) {
+		die("The docset $docsetname.docset already exists in your destination folder. Please move or delete it first or choose another location.\n");
+	}
+	$files = scandir($reference);
+	mkdir($destination . "$docsetname.docset/Contents/Resources/Documents/ref/", 0777, true);
+	copydir($reference, $destination . "$docsetname.docset/Contents/Resources/Documents/ref");
+	if($create == false) {
+		copy($lastdocset . "Contents/Info.plist", $destination . "$docsetname.docset/Contents/Info.plist");
+		copy($lastdocset . "Contents/Resources/Nodes.xml", $destination . "$docsetname.docset/Contents/Resources/Nodes.xml");
+		$readarray_data = file_get_contents($lastdocset . "Contents/docsetbuild/docsetbuild.data");
+		$readarray_data = preg_replace('!s:(\d+):"(.*?)";!se', "'s:'.strlen('$2').':\"$2\";'", $readarray_data);
+		$readarray = unserialize($readarray_data);
+	} else {
+		file_put_contents($destination . "$docsetname.docset/Contents/Info.plist", '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' . "\n" . '<plist version="1.0">' . "\n" . '<dict>' . "\n" . '	<key>CFBundleIdentifier</key>' . "\n" . '	<string>' . strtolower($docsetname) . '</string>' . "\n" . '	<key>CFBundleName</key>' . "\n" . '	<string>' . $docsetname . '</string>' . "\n" . '	<key>DocSetPlatformFamily</key>' . "\n" . '	<string>' . strtolower($docsetname) . '</string>' . "\n" . '</dict>' . "\n" . '</plist>');
+		file_put_contents($destination . "$docsetname.docset/Contents/Resources/Nodes.xml", '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<DocSetNodes version="1.0">' . "\n" . '    <TOC>' . "\n" . '        <Node type="folder">' . "\n" . '            <Name>' . $docsettitle . '</Name>' . "\n" . '            <Path>ref/' . $docsetindex . '</Path>' . "\n" . '        </Node>' . "\n" . '    </TOC>' . "\n" . '</DocSetNodes>');
+		$readarray = array();
+	}
+	$xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<Tokens version="1.0">' . "\n";
+	$begin = true;
+	foreach($files as $file) {
+		$name = "";
+		$type = "";
+		if(strpos($file, ".html") !== false) {
+			$contents = file_get_contents($destination . "$docsetname.docset/Contents/Resources/Documents/ref/" . $file);
+			if(!isset($readarray[$file])) {
+				echo "\nFilename: " . $file . "\nIndex (ENTER for yes,\"n\" for no)?";
+				system("stty -icanon");
+				$index = fread(STDIN, 1);
+				if($index == "\n") {
+					do {
+						echo "Type:";
+						$type = "";
+						do {
+							system("stty -icanon");
+							$c = fread(STDIN, 1);
+							$type .= $c;
+						} while($c != "\n");
+						$type = str_replace("\n", "", $type);
+						switch($type) {
+							case "1":
+							case "cl":
+								$type = "cl";
+								$not = false;
+								break;
+							case "2":
+							case "cat":
+								$type = "cat";
+								$not = false;
+								break;
+							case "3":
+							case "intf":
+								$type = "intf";
+								$not = false;
+								break;
+							case "4":
+							case "binding":
+								$type = "binding";
+								$not = false;
+								break;
+							case "5":
+							case "clm":
+								$type = "clm";
+								$not = false;
+								break;
+							case "6":
+							case "instp":
+								$type = "instp";
+								$not = false;
+								break;
+							case "7":
+							case "tdef":
+								$type = "tdef";
+								$not = false;
+								break;
+							case "8":
+							case "func":
+								$type = "func";
+								$not = false;
+								break;
+							case "9":
+							case "macro":
+								$type = "macro";
+								$not = false;
+								break;
+							case "0":
+							case "clconst":
+								$type = "clconst";
+								$not = false;
+								break;
+							default:
+								$not = true;
+						}
+					} while($not == true);
+					do {
+						$name = "";
+						system("stty -icanon");
+						echo "Name:";
+						do {
+							$c = fread(STDIN, 1);
+							$name .= $c;
+						} while($c != "\n");
+					} while($name == "\n");
+					$name = str_replace("\n", "", $name);
+					$name = str_replace("<", "&#60;", $name);
+					$name = str_replace(">", "&#62;", $name);
+					$name = str_replace("/", "&#47;", $name);
+					if($begin == false) {
+						$xml .= "\n";
+					}
+					$array[$file] = array($name, $type);
+					$xml .= '	<Token>' . "\n" . '		<TokenIdentifier>' . "\n" . '			<Name>' . $name . '</Name>' . "\n" . '			<Type>' . $type . '</Type>' . "\n" . '			<APILanguage>cpp</APILanguage>' . "\n" . '		</TokenIdentifier>' . "\n" . '		<Path>ref/' . $file . '</Path>' . "\n" . '		<Anchor></Anchor>' . "\n" . '	</Token>';
+					$write = $xml . "\n</Tokens>";
+					file_put_contents($destination . "$docsetname.docset/Contents/Resources/Tokens.xml", $write);
+					$begin = false;
+				} else {
+					$array[$file] = false;
+				}
+			} else if(!$readarray[$file] == false) {
+				if($begin == false) {
+					$xml .= "\n";
+				}
+				$array[$file] = $readarray[$file];
+				$xml .= '	<Token>' . "\n" . '		<TokenIdentifier>' . "\n" . '			<Name>' . $readarray[$file][0] . '</Name>' . "\n" . '			<Type>' . $readarray[$file][1] . '</Type>' . "\n" . '			<APILanguage>cpp</APILanguage>' . "\n" . '		</TokenIdentifier>' . "\n" . '		<Path>Arduino/' . $file . '</Path>' . "\n" . '		<Anchor></Anchor>' . "\n" . '	</Token>';
+				$write = $xml . "\n</Tokens>";
+				file_put_contents($destination . "$docsetname.docset/Contents/Resources/Tokens.xml", $write);
+				$begin = false;
+			}
+		}
+	}
+	mkdir($destination . "$docsetname.docset/Contents/docsetbuild/", 0777, true);
+	file_put_contents($destination . "$docsetname.docset/Contents/docsetbuild/docsetbuild.data", serialize($array));
+	file_put_contents($destination . "$docsetname.docset/Contents/docsetbuild/docsetbuild", file_get_contents($_SERVER["PHP_SELF"]));
+	echo "\nWill now index the docset.\n\n";
+	system("/Developer/usr/bin/docsetutil index " . $destination . "$docsetname.docset");
+	echo "The docset was successfully created and indexed! Please also save it (what should be normal), you need it next time!\n";
+	exit(0);
+	
+	function copydir($source, $destination) {
+		if(!is_dir($destination)) {
+			$oldumask = umask(0); 
+			mkdir($destination, 01777);
+			umask($oldumask);
+		}
+		$dir_handle = @opendir($source) or die("Unable to open reference directory. Non valid Arduino.app?\n");
+		while ($file = readdir($dir_handle)) {
+			if($file != "." && $file != ".." && !is_dir("$source/$file")) {
+				copy("$source/$file","$destination/$file");
+			}
+		}
+		closedir($dir_handle);
+	}
+?>

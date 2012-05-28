@@ -1,0 +1,193 @@
+#!/usr/bin/php
+<?php
+	if(!isset($argv[2])) {
+		die("Usage: arduinobuild Arduino.docset Arduino.app [destination]\nCompiles the Arduino docset for Dash using the last one (and is the generation script for which I used the most effort).\n\nArduino.docset: The last docset for comparison (with trailing slash).\nArduino.app:    The Arduino.app with the new reference (or alternatively the \"reference\" folder from inside it (with trailing slash).\ndestination:    Folder to put the docset into (also with trailing slash). Optional, if not given, current directory will be used.\n");
+	}
+	if(substr($argv[1], -1) != "/" || substr($argv[2], -1) != "/") {
+		die("Please use trailing slashes in all params!\n");
+	} else if(isset($argv[3]) && substr($argv[3], -1) != "/") {
+		die("Please use trailing slashes in all params!\n");
+	}
+	if(!file_exists($argv[1] . "Contents/arduinobuild/arduinobuild.data") || !file_exists($argv[1] . "Contents/Resources/Documents/Arduino/img/logo.png")) {
+		die("The Arduino.docset you provided does not contain the required diff file. Please check if you used the right docset.\n");
+	}
+	if(isset($argv[3])) {
+		$destination = $argv[3];
+	} else {
+		$destination = "./";
+	}
+	if(file_exists($destination . "Arduino.docset")) {
+		die("The docset Arduino.docset already exists in that folder. Please move or delete it first or choose another location.\n");
+	}
+	if(file_exists($argv[2] . "/Contents/Resources/Java/reference")) {
+		$files = scandir($argv[2] . "/Contents/Resources/Java/reference");
+		$inside = true;
+	} else {
+		$files = scandir($argv[2]);
+		$inside = false;
+	}
+	mkdir($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/img/", 0777, true);
+	if($inside == true) {
+		copydir($argv[2] . "/Contents/Resources/Java/reference/", $destination . "Arduino.docset/Contents/Resources/Documents/Arduino");
+	} else {
+		copydir($argv[2], $destination . "Arduino.docset/Contents/Resources/Documents/Arduino");
+	}
+	copy($argv[1] . "Contents/Resources/Documents/Arduino/img/logo.png", $destination . "Arduino.docset/Contents/Resources/Documents/Arduino/img/logo.png");
+	file_put_contents($destination . "Arduino.docset/Contents/Info.plist", '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' . "\n" . '<plist version="1.0">' . "\n" . '<dict>' . "\n" . '	<key>CFBundleIdentifier</key>' . "\n" . '	<string>arduino</string>' . "\n" . '	<key>CFBundleName</key>' . "\n" . '	<string>Arduino</string>' . "\n" . '	<key>DocSetPlatformFamily</key>' . "\n" . '	<string>arduino</string>' . "\n" . '</dict>' . "\n" . '</plist>');
+	file_put_contents($destination . "Arduino.docset/Contents/Resources/Nodes.xml", '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<DocSetNodes version="1.0">' . "\n" . '    <TOC>' . "\n" . '        <Node type="folder">' . "\n" . '            <Name>Arduino Reference</Name>' . "\n" . '            <Path>Arduino/index.html</Path>' . "\n" . '        </Node>' . "\n" . '    </TOC>' . "\n" . '</DocSetNodes>');
+	$replaced = str_replace("#page {width: 800px;margin: 0 auto;}", "", file_get_contents($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/arduinoWideRender.css"));
+	file_put_contents($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/arduinoWideRender.css", $replaced);
+	$readarray_data = file_get_contents($argv[1] . "Contents/arduinobuild/arduinobuild.data");
+	$readarray_data = preg_replace('!s:(\d+):"(.*?)";!se', "'s:'.strlen('$2').':\"$2\";'", $readarray_data);
+	$readarray = unserialize($readarray_data);
+	$xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<Tokens version="1.0">' . "\n";
+	$begin = true;
+	foreach($files as $file) {
+		$name = "";
+		$type = "";
+		if(strpos($file, ".html") !== false) {
+			$contents = file_get_contents($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/" . $file);
+			$contents = str_replace('<div id="pageheader"', '<div id="pageheader" style="position: absolute; top: 20px; right: 20px;"', $contents);
+			$contents = str_replace('<div class="title"><a href=\'http://arduino.cc/en\'>Arduino</a></div>', '<div class="title" style="position: absolute; top: 0; right: 0;"><a href=\'http://arduino.cc/en\' style="background-position: top right;">Arduino</a></div>', $contents);
+			$contents = preg_replace('{<!--PageLeftFmt-->.*?<!--/PageLeftFmt-->}sm', '', $contents);
+			$contents = preg_replace('{(<p class=\'vspace\'></p>)?<p><a class=\'wikilink\' href=\'index.html\'>Reference Home.*?domain\..</p>}s', '', $contents);
+			$contents = preg_replace('{<!--PageFooterFmt-->.*?<!--/PageFooterFmt-->}sm', '', $contents);
+			preg_match_all('{<img src=\'(.*?)\'}', $contents, $imgs);
+			foreach($imgs[1] as $id => $img) {
+				$imgstosave[$img] = basename($img);
+				$contents = str_replace(dirname($img) . "/", "img/", $contents);
+			}
+			file_put_contents($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/" . $file, $contents);
+			preg_match('{<h2>(.*?)</h2>}', $contents, $matches);
+			$found = @html_entity_decode($matches[1]);
+			$found = preg_replace('{<(.*?)>}', "", $found);
+			if(!isset($readarray[$file])) {
+				echo "\nFilename: " . $file . "\nName (in file): \"" . $found . "\"\nIndex (ENTER for yes,\"n\" for no)?";
+				system("stty -icanon");
+				$index = fread(STDIN, 1);
+				if($index == "\n") {
+					echo "\nType:";
+					system("stty -icanon");
+					$type = fread(STDIN, 1);
+					do {
+						switch($type) {
+							case "1":
+							case "cl":
+								$type = "cl";
+								$not = false;
+								break;
+							case "2":
+							case "cat":
+								$type = "cat";
+								$not = false;
+								break;
+							case "3":
+							case "intf":
+								$type = "intf";
+								$not = false;
+								break;
+							case "4":
+							case "binding":
+								$type = "binding";
+								$not = false;
+								break;
+							case "5":
+							case "clm":
+								$type = "clm";
+								$not = false;
+								break;
+							case "6":
+							case "instp":
+								$type = "instp";
+								$not = false;
+								break;
+							case "7":
+							case "tdef":
+								$type = "tdef";
+								$not = false;
+								break;
+							case "8":
+							case "func":
+								$type = "func";
+								$not = false;
+								break;
+							case "9":
+							case "macro":
+								$type = "macro";
+								$not = false;
+								break;
+							case "0":
+							case "clconst":
+								$type = "clconst";
+								$not = false;
+								break;
+							default:
+								echo "\nType:";
+								$type = fread(STDIN, 1);
+								$not = true;
+						}
+					} while($not == true);
+					system("stty -icanon");
+					echo "\nName (ENTER for using the displayed one):";
+					do {
+						$c = fread(STDIN, 1);
+						$name .= $c;
+					} while($c != "\n");
+					if($name == "\n") {
+						$name = $found;
+					}
+					$name = str_replace("\n", "", $name);
+					$name = str_replace("<", "&#60;", $name);
+					$name = str_replace(">", "&#62;", $name);
+					$name = str_replace("/", "&#47;", $name);
+					if($begin == false) {
+						$xml .= "\n";
+					}
+					$array[$file] = array($name, $type);
+					$xml .= '	<Token>' . "\n" . '		<TokenIdentifier>' . "\n" . '			<Name>' . $name . '</Name>' . "\n" . '			<Type>' . $type . '</Type>' . "\n" . '			<APILanguage>cpp</APILanguage>' . "\n" . '		</TokenIdentifier>' . "\n" . '		<Path>Arduino/' . $file . '</Path>' . "\n" . '		<Anchor></Anchor>' . "\n" . '	</Token>';
+					$write = $xml . "\n</Tokens>";
+					file_put_contents($destination . "Arduino.docset/Contents/Resources/Tokens.xml", $write);
+					$begin = false;
+				} else {
+					$array[$file] = false;
+				}
+			} else if(!$readarray[$file] == false) {
+				if($begin == false) {
+					$xml .= "\n";
+				}
+				$array[$file] = $readarray[$file];
+				$xml .= '	<Token>' . "\n" . '		<TokenIdentifier>' . "\n" . '			<Name>' . $readarray[$file][0] . '</Name>' . "\n" . '			<Type>' . $readarray[$file][1] . '</Type>' . "\n" . '			<APILanguage>cpp</APILanguage>' . "\n" . '		</TokenIdentifier>' . "\n" . '		<Path>Arduino/' . $file . '</Path>' . "\n" . '		<Anchor></Anchor>' . "\n" . '	</Token>';
+				$write = $xml . "\n</Tokens>";
+				file_put_contents($destination . "Arduino.docset/Contents/Resources/Tokens.xml", $write);
+				$begin = false;
+			}
+		}
+	}
+	echo "\nFetching images for offline use. This may take a while...\n";
+	foreach($imgstosave as $img => $basename) {
+		file_put_contents($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/img/" . $basename, file_get_contents($img));
+	}
+	echo "Finished fetching images. Will now index the docset.\n";
+	mkdir($destination . "Arduino.docset/Contents/arduinobuild/", 0777, true);
+	file_put_contents($destination . "Arduino.docset/Contents/arduinobuild/arduinobuild.data", serialize($array));
+	file_put_contents($destination . "Arduino.docset/Contents/arduinobuild/arduinobuild", file_get_contents($_SERVER["PHP_SELF"]));
+	echo "\n\n";
+	system("/Developer/usr/bin/docsetutil index " . $destination . "Arduino.docset");
+	echo "The docset was successfully created and indexed! Please also save it (what should be normal), you need it next time!\n";
+	exit(0);
+	
+	function copydir($source, $destination) {
+		if(!is_dir($destination)) {
+			$oldumask = umask(0); 
+			mkdir($destination, 01777);
+			umask($oldumask);
+		}
+		$dir_handle = @opendir($source) or die("Unable to open reference directory. Non valid Arduino.app?\n");
+		while ($file = readdir($dir_handle)) {
+			if($file != "." && $file != ".." && !is_dir("$source/$file")) {
+				copy("$source/$file","$destination/$file");
+			}
+		}
+		closedir($dir_handle);
+	}
+?>
