@@ -1,3 +1,4 @@
 #!/bin/sh
-sudo curl https://raw.github.com/vis7mac/docsetbuild/master/docsetbuild > /usr/bin/docsetbuild
+curl https://raw.github.com/vis7mac/docsetbuild/master/docsetbuild > /tmp/docsetbuild
+sudo mv /tmp/docsetbuild /usr/bin/
 sudo chmod u+x /usr/bin/docsetbuild
