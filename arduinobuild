@@ -48,10 +48,11 @@
 		if(strpos($file, ".html") !== false) {
 			$contents = file_get_contents($destination . "Arduino.docset/Contents/Resources/Documents/Arduino/" . $file);
 			$contents = str_replace('<div id="pageheader"', '<div id="pageheader" style="position: absolute; top: 20px; right: 20px;"', $contents);
-			$contents = str_replace('<div class="title"><a href=\'http://arduino.cc/en\'>Arduino</a></div>', '<div class="title" style="position: absolute; top: 0; right: 0;"><a href=\'http://arduino.cc/en\' style="background-position: top right;">Arduino</a></div>', $contents);
+			$contents = str_replace('<div class="title"><a href=\'http://arduino.cc/en\'>Arduino</a></div>', '<div class="title" style="position: fixed; top: 10px; right: 10px;"><a href=\'http://arduino.cc/en\' style="background-position: top right;">Arduino</a></div>', $contents);
 			$contents = preg_replace('{<!--PageLeftFmt-->.*?<!--/PageLeftFmt-->}sm', '', $contents);
 			$contents = preg_replace('{(<p class=\'vspace\'></p>)?<p><a class=\'wikilink\' href=\'index.html\'>Reference Home.*?domain\..</p>}s', '', $contents);
 			$contents = preg_replace('{<!--PageFooterFmt-->.*?<!--/PageFooterFmt-->}sm', '', $contents);
+			$contents = str_replace('</div>' . "\n" . '</body>', '<div id="pagefooter">&copy;<a href="http://arduino.cc/">Arduino</a> | Dash docset by <a href="http://dash.lu-x-it.de/">Lukas Bestle</a></div></div></body>', $contents);
 			preg_match_all('{<img src=\'(.*?)\'}', $contents, $imgs);
 			foreach($imgs[1] as $id => $img) {
 				$imgstosave[$img] = basename($img);
