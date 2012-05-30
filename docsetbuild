@@ -23,9 +23,14 @@
 			} else {
 				$destination = "./";
 			}
-		} else {
+		} else if(file_exists($argv[2] . "index.html")) {
 			$docsetindex = "index.html";
 			$destination = "./";
+		} else if(file_exists($argv[2] . "index.htm")) {
+			$docsetindex = "index.htm";
+			$destination = "./";		
+		} else {
+			die("Did not find any index file to use. Please give one to me.")
 		}
 		$reference = $argv[2];
 		if(substr($argv[2], -1) != "/") {
@@ -76,7 +81,7 @@
 	foreach($files as $file) {
 		$name = "";
 		$type = "";
-		if(strpos($file, ".html") !== false) {
+		if(strpos($file, ".html") !== false || strpos($file, ".htm") !== false) {
 			$contents = file_get_contents($destination . "$docsetname.docset/Contents/Resources/Documents/ref/" . $file);
 			if(!isset($readarray[$file])) {
 				echo "\nFilename: " . $file . "\nIndex (ENTER for yes,\"n\" for no)?";
