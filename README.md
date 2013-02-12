@@ -18,7 +18,3 @@ arduinobuild
 <code>arduinobuild</code> is a fork of this project and shows how you can manipulate .html files, fetch images from servers and get names out of the files.
 That's not so special, because you can do all that with PHP.
 If you want to create your own fork which creates another specific docset you could get inspired by this one.
-
-License
-===========
-Both scripts are released under GNU General Public License (GPL) and are free to use and to modify however you want.
